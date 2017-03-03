@@ -1,6 +1,30 @@
+import React from 'react';
+import { requireNativeComponent, NativeModules } from 'react-native';
 
-import { NativeModules } from 'react-native';
+class RNBlurCameraView extends React.Component {
+    
+  render() {
+    return <RNBlurCamera { ...this.props } />;
+  }
 
-const { RNBlurCamera } = NativeModules;
+  getSnapshot(){
+    return new Promise((resolve, reject) => {
+      NativeModules.RNBlurCameraManager.getSnapshot((err, data) => {
+        if (!err){
+          resolve(data);
+        } else {
+          reject(err);  
+        }
+      });
+    });
+  }
+}
 
-export default RNBlurCamera;
+RNBlurCameraView.propTypes = {
+  blurRadius: React.PropTypes.number,
+  blurEnabled: React.PropTypes.bool,
+};
+
+var RNBlurCamera = requireNativeComponent('RNBlurCamera', RNBlurCamera);
+
+module.exports = RNBlurCameraView;
