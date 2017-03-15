@@ -15,10 +15,15 @@
     if ((self = [super init])) {
         _eventDispatcher = eventDispatcher;
         
-        GPUImageStillCamera* stillCamera = [[GPUImageStillCamera alloc] init];
+        GPUImageStillCamera* stillCamera = [[GPUImageStillCamera alloc] initWithSessionPreset:AVCaptureSessionPresetMedium cameraPosition:AVCaptureDevicePositionFront];
         GPUImageGaussianBlurFilter* filter = [[GPUImageGaussianBlurFilter alloc] init];
         GPUImageView *fv = [[GPUImageView alloc]init];
-        
+        [filter setBlurRadiusInPixels:10];
+        [filter addTarget:fv];
+        stillCamera.outputImageOrientation = UIInterfaceOrientationPortrait;
+        stillCamera.horizontallyMirrorFrontFacingCamera = YES;
+        stillCamera.horizontallyMirrorRearFacingCamera = NO;
+        [stillCamera startCameraCapture];
         [self setStillCamera:stillCamera];
         [self setCaptureImageView:fv];
         [self setBlurFilter:filter];
@@ -77,41 +82,37 @@
 }
 
 - (void) getScreenshot: (void(^)(NSString*, NSError*)) cb {
-    [[self videoCamera] stopCameraCapture];
-
+    
     GPUImageStillCamera* stillCamera = [self stillCamera];
-    stillCamera.outputImageOrientation = UIInterfaceOrientationPortrait;
     
     GPUImageGaussianBlurFilter* filter = [self blurFilter];
-    // Camera -> Filter
-    if ([self blurEnabled]){
-        [filter setBlurRadiusInPixels:[_blurRadius floatValue]];
-    } else {
-        [filter setBlurRadiusInPixels: 0.0];
-    }
-    
     [stillCamera addTarget:filter];
     GPUImageView *fv = [self captureImageView];
     [filter addTarget:fv];
+    [filter useNextFrameForImageCapture];
     
-    [stillCamera startCameraCapture];
-    [stillCamera capturePhotoAsPNGProcessedUpToFilter:filter withOrientation:UIImageOrientationUp withCompletionHandler:^(NSData *processedImageData, NSError *error){
-        NSData *dataForPNGFile = processedImageData;
-        NSString* b = [dataForPNGFile base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
-        
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        NSString *documentsDirectory = [paths objectAtIndex:0];
-        
-        NSError *error2 = nil;
-        NSString * imagePath = [documentsDirectory stringByAppendingPathComponent:@"FilteredPhoto.jpg"];
-        if (![dataForPNGFile writeToFile:imagePath options:NSAtomicWrite error:&error2])
-        {
-            cb(nil, error2);
-            return;
-        } else {
-            cb(imagePath, nil);
-        }
-    }];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        //[[self videoCamera] stopCameraCapture];
+        [stillCamera capturePhotoAsPNGProcessedUpToFilter:filter withOrientation:UIImageOrientationUp withCompletionHandler:^(NSData *processedImageData, NSError *error){
+            NSData *dataForPNGFile = processedImageData;
+            NSString* b = [dataForPNGFile base64EncodedStringWithOptions:NSDataBase64EncodingEndLineWithLineFeed];
+            
+            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *documentsDirectory = [paths objectAtIndex:0];
+            
+            NSError *error2 = nil;
+            NSString *fileName = [[[[NSUUID alloc] init] UUIDString] stringByAppendingString:@"-wtf-tmp.png"];
+            NSString * imagePath = [documentsDirectory stringByAppendingPathComponent:fileName];
+            if (![dataForPNGFile writeToFile:imagePath options:NSAtomicWrite error:&error2])
+            {
+                cb(nil, error2);
+                return;
+            } else {
+                cb(@{@"uri": imagePath, @"data": b}, nil);
+                return;
+            }
+        }];
+    });
 }
 
 /*
